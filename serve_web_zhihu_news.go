@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"github.com/lunny/xorm"
 	_ "github.com/mattn/go-sqlite3"
+	"go/build"
 	"html/template"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 )
@@ -14,31 +14,8 @@ import (
 var baseDirectory string = ""
 var engine *xorm.Engine
 
-func setOptions(options []string) (string, error) {
-
-	dbPath := ""
-	for i := 1; i < len(options); i++ {
-		switch options[i] {
-		case "--database":
-			i++
-			dbPath = options[i]
-		case "--directory":
-			i++
-			baseDirectory = options[i]
-		default:
-			return "", &NewsError{"Invalid options"}
-		}
-	}
-
-	if len(dbPath) == 0 || len(baseDirectory) == 0 {
-		return "", &NewsError{"Invalid options"}
-	}
-
-	return dbPath, nil
-}
-
 func ListArticles(w http.ResponseWriter, r *http.Request) {
-	templateFilePath := fmt.Sprintf("%sviews/templates/listArticle.html", []byte(baseDirectory))
+	templateFilePath := fmt.Sprintf("%s/views/templates/listArticle.html", []byte(baseDirectory))
 	t, err := template.ParseFiles(templateFilePath)
 	if err != nil {
 		fmt.Fprintf(w, err.Error())
@@ -96,6 +73,7 @@ func (h *RegexpHandler) HandleFunc(pattern *regexp.Regexp, handler func(http.Res
 }
 
 func (h *RegexpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("base directory =", baseDirectory)
 	for _, router := range h.routes {
 		if router.pattern.MatchString(r.URL.Path) {
 			router.handler.ServeHTTP(w, r)
@@ -105,14 +83,21 @@ func (h *RegexpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
+func findRoot() (string, error) {
+	ctx := build.Default
+	p, err := ctx.Import("github.com/ZCLanner/web-zhihu-news/", "", build.FindOnly)
+	if err != nil {
+		return "", err
+	}
+	return p.Dir, nil
+}
+
 func main() {
 
-	dbPath, err := setOptions(os.Args)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Usage: %s --database $DATAPASEPATH --directory $WORKING_DIRECTORY\n", os.Args[0])
-		return
-	}
+	baseDirectory, err := findRoot()
+	checkErr(err)
 
+	dbPath := fmt.Sprintf("%s/news.db", []byte(baseDirectory))
 	engine, err = xorm.NewEngine(xorm.SQLITE, dbPath)
 	if err != nil {
 		return
@@ -126,7 +111,7 @@ func main() {
 
 	re, err := regexp.Compile("/css/*")
 	checkErr(err)
-	dir := fmt.Sprintf("%sstatic/", []byte(baseDirectory))
+	dir := fmt.Sprintf("%s/static/", []byte(baseDirectory))
 	router.Handler(re, http.FileServer(http.Dir(dir)))
 
 	re, err = regexp.Compile("/js/*")
