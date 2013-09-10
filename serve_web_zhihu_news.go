@@ -11,8 +11,48 @@ import (
 	"strconv"
 )
 
-var baseDirectory string = ""
+var baseDirectory string
 var engine *xorm.Engine
+
+func main() {
+	var err error
+	baseDirectory, err = findRoot()
+	checkErr(err)
+
+	fmt.Println("base directory =", baseDirectory)
+	dbPath := fmt.Sprintf("%s/news.db", []byte(baseDirectory))
+	engine, err = xorm.NewEngine(xorm.SQLITE, dbPath)
+	if err != nil {
+		return
+	}
+	defer engine.Close()
+	engine.ShowSQL = true
+
+	go Crawl(engine)
+
+	router := new(RegexpHandler)
+
+	re, err := regexp.Compile("/css/*")
+	checkErr(err)
+	dir := fmt.Sprintf("%s/static/", []byte(baseDirectory))
+	router.Handler(re, http.FileServer(http.Dir(dir)))
+
+	re, err = regexp.Compile("/js/*")
+	checkErr(err)
+	router.Handler(re, http.FileServer(http.Dir(dir)))
+
+	re, err = regexp.Compile("/article")
+	checkErr(err)
+	router.HandleFunc(re, ViewArticle)
+
+	re, err = regexp.Compile("/*")
+	checkErr(err)
+	router.HandleFunc(re, ListArticles)
+
+	err = http.ListenAndServe(":8080", router)
+	checkErr(err)
+
+}
 
 func ListArticles(w http.ResponseWriter, r *http.Request) {
 	templateFilePath := fmt.Sprintf("%s/views/templates/listArticle.html", []byte(baseDirectory))
@@ -90,43 +130,4 @@ func findRoot() (string, error) {
 		return "", err
 	}
 	return p.Dir, nil
-}
-
-func main() {
-
-	baseDirectory, err := findRoot()
-	checkErr(err)
-
-	dbPath := fmt.Sprintf("%s/news.db", []byte(baseDirectory))
-	engine, err = xorm.NewEngine(xorm.SQLITE, dbPath)
-	if err != nil {
-		return
-	}
-	defer engine.Close()
-	engine.ShowSQL = true
-
-	go Crawl(engine)
-
-	router := new(RegexpHandler)
-
-	re, err := regexp.Compile("/css/*")
-	checkErr(err)
-	dir := fmt.Sprintf("%s/static/", []byte(baseDirectory))
-	router.Handler(re, http.FileServer(http.Dir(dir)))
-
-	re, err = regexp.Compile("/js/*")
-	checkErr(err)
-	router.Handler(re, http.FileServer(http.Dir(dir)))
-
-	re, err = regexp.Compile("/article")
-	checkErr(err)
-	router.HandleFunc(re, ViewArticle)
-
-	re, err = regexp.Compile("/*")
-	checkErr(err)
-	router.HandleFunc(re, ListArticles)
-
-	err = http.ListenAndServe(":8080", router)
-	checkErr(err)
-
 }
