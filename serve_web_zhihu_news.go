@@ -125,7 +125,7 @@ func (h *RegexpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func findRoot() (string, error) {
 	ctx := build.Default
-	p, err := ctx.Import("github.com/ZCLanner/web-zhihu-news/", "", build.FindOnly)
+	p, err := ctx.Import("github.com/ZCLanner/WebZhihuNews/", "", build.FindOnly)
 	if err != nil {
 		return "", err
 	}
